@@ -1,0 +1,219 @@
+---
+title: "Higher Education Outcomes"
+author: "Ganesh kumar Chelladurai; Student ID 19233370"
+date: "9/29/2019"
+output: pdf_document
+---
+
+# Setup
+
+```{r setup, echo=TRUE}
+# this setup chunk loads the tidyverse. no other libraries should be used
+library("tidyverse")
+
+# setting echo=TRUE will cause all R code to be included in the pdf output
+knitr::opts_chunk$set(echo=TRUE)
+```
+
+# Installing Latex
+
+If you don't have Latex installed on your machine, you may see an
+error when `knit`ting this file, and no pdf will be produced. Try
+installing Latex as follows, and `knit` again.
+
+```
+# see https://yihui.name/tinytex/ for docs
+> install.packages('tinytex')
+> tinytex::install_tinytex()
+```
+
+
+
+# Loading data
+
+First, load the data, and convert to a tibble (i.e. a `dplyr` dataframe) named `earnings`, with column names "Years.since.graduation", "NFQ.Level", "Sex", "Field", "Statistic", and "Value".
+
+```{r}
+#Importing tidyverse library
+library(tidyverse)
+#Using delimiter as semicolon and making table
+#col_names adds column names to the data
+#col_types defines the type of each column
+earnings<- read_delim("earnings.csv",";",col_names=c("Years.since.graduation","NFQ.Level",
+                                                     "Sex","Field","Statistic","Value"),
+                                     col_types=cols(Years.since.graduation=col_integer(),
+                                     NFQ.Level=col_factor(),Sex=col_factor(),
+                                     Field=col_factor(),Statistic=col_factor(),
+                                     Value=col_double()))
+
+```
+
+# Reshaping and cleaning
+
+We should change the NFQ Level values to integers. The following function will be useful:
+
+```{r, echo=TRUE}
+convert_nfq <- function(s) {strtoi(substr(s, 11, 13))} # convert substring to int
+```
+
+Apply `convert_nfq` and check the result:
+```{r}
+# mutate_at changes the specific column specified "NFQ.Level" using function convert_nfq
+# assigning the earnings back to earnings
+earnings<-earnings%>%mutate_at(c("NFQ.Level"),convert_nfq)
+```
+
+
+Let's rename the `Years.since.graduation` column since it's a long name:
+
+```{r}
+# rename changes the name of the column rename(new_name = old_name)
+# assigning the earnings back to earnings
+earnings<-earnings%>%rename("Years"="Years.since.graduation")
+```
+
+Using `filter`, we discard all data where `Years` is not 1, because for some reason all that data is `NA`. Notice this reduces from 1600 rows to 400. 
+
+```{r}
+# assigning the earnings back to earnings
+# Filter method filters the data based on the condition given(Years==1)
+earnings<-earnings%>%filter(Years==1)
+```
+
+Our analysis is going to be based on Field, Sex, NFQ Level, Median Earnings, and Number of Graduates. We would like to have a column giving Median Earnings and another column giving Number of Graduates. That would be *tidy data*. Instead, we have one column giving the `Statistic` name, and another giving that statistic's `Value`. We fix this using `spread`. Notice that in the result, there
+are several new columns. Some are shown directly, and the tibble says
+"2 more variables" at the bottom.
+
+```{r}
+# spread splits the specified column (key,value) the key is split into the new columns 
+# and the value of each column is the value specified
+earnings<-earnings%>%spread(Statistic,Value)
+```
+
+Now we can discard the 25th and 75th percentiles and rename the other
+columns:
+
+```{r}
+# select selects only the column specified .minus(-) avoids only the column specified 
+# assigning the earnings back to earnings
+earnings<-earnings%>%select(-c("P25 Earnings of Graduates (Euro)",
+                               "P75 Earnings of Graduates (Euro)"))
+
+#rename the columns
+# assigning the earnings back to earnings
+earnings<-earnings%>%rename("Median.Earnings"="P50 Earnings of Graduates (Euro)",
+                            "Number.grads"="Number of Graduates (Persons)")
+```
+
+Now, let's have a summary of what we've got:
+```{r}
+summary(earnings)
+```
+
+
+# Plotting
+
+Now we are ready to make a first plot. Let's look at the number of grads, by field and NFQ level.
+
+```{r}
+# plotting the graph with x as NFQ.level y as Field
+# size varies the points plotted based on the column Number.grads
+ggplot(earnings,mapping = aes(x=NFQ.Level,y=Field))+geom_point(aes(size=Number.grads))
+```
+
+Now we'll analyse the data by Sex. Getting the male and female dots to appear correctly is tricky, so here is a snippet you can add to your `ggplot` call:
+
+`geom_point(position=position_nudge(x=0.25*(as.numeric(earnings$Sex) - 1.5)))`
+
+```{r}
+# plot graph with x as NFQ.Level and y as Field 
+# colour assign different colur for each sex
+# size varies the points plotted based on the column Number.grads
+# position change the positon at which the point is plotted
+ggplot(earnings,mapping = aes(x=NFQ.Level,y=Field,colour=Sex))+
+  geom_point(aes(size=Number.grads),
+             position=position_nudge(x=0.25*(as.numeric(earnings$Sex) - 1.5)))
+```
+
+Here is a more traditional scatter plot, but bear in mind that what we see are distributions of median earnings, not distributions of earnings. We will see a Warning message "Removed 17 rows containing missing values (geom_point)." - this is correct, of course, as we do have NA values for earnings wherever there were no grads. We can ignore it. 
+```{r}
+# plot graph with x as NFQ.Level and y as Median.Earnings 
+# colour assign different colur for each sex
+# size varies the points plotted based on the column Number.grads
+# position change the positon at which the point is plotted
+# guides is used to change the legends turning off the alplha legend with FALSE
+ggplot(earnings,mapping = aes(x=NFQ.Level,y=Median.Earnings))+
+  geom_point(aes(colour=Sex,size=Number.grads,alpha=0.5),
+             position=position_nudge(x=0.25*(as.numeric(earnings$Sex) - 1.5)))+
+             guides(alpha=FALSE)
+```
+Downloaded the  Earnings of Graduates by Sex, Field of Study, NFQ Level, Years since Graduation, Year and Statistic for the year 2011.
+The same selection was made during the download expect I fileretered the no. of years after graduation to 1, saved the file as 'business_size.csv'.
+URL: https://statbank.cso.ie/px/pxeirestat/Statire/SelectVarVal/Define.asp?maintable=HEO11&PLanguage=0
+
+# Adding the column headers and filtering using year just like for earnings
+
+```{r}
+business<- read_csv("business_size.csv",
+                    col_names=c("Years","Scale","Sex","Field","Number.grads"),
+                    col_types=cols(Years=col_integer(),Scale=col_factor(),Sex=col_factor(),
+                                   Field=col_factor(),Number.grads=col_double()))
+business<-business%>%filter(Years==1)
+```
+# Format the existing dataset(earnings) to make fit for join
+```{r}
+# Removing unnecessary rows Number.grads,NFQ.Level
+earnings<-earnings%>%select(-c(Number.grads,NFQ.Level,Sex,Years))
+# group_by groups the tibble by both Field and sex 
+# taking the mean of the Median.Earnings when we group the data 
+# and made the column 2016(Earnings for 2016)
+# na.rm remove the NA in the values
+earnings2016<-earnings%>%group_by(Field)%>%summarise("2016"=mean(Median.Earnings, na.rm = TRUE))
+```
+
+#Our analysis will be based on the earnings between 2011 & 2016 based on Fields
+#Reading and formatting the data
+```{r}
+#Reading the data, sama as above
+earnings2011<- read_csv("earnings_2011.csv",
+                        col_names=c("Years","NFQ.Level","Sex","Field","Earnings"),
+                        col_types=cols(Years=col_integer(),NFQ.Level=col_factor(),
+                                      Sex=col_factor(),Field=col_factor(),
+                                      Earnings=col_double()))
+#Removing unnecessary rows
+earnings2011<-earnings2011%>%select(-c(Sex,NFQ.Level))
+```
+```{r}
+# taking the mean of the Median.Earnings when we group the data
+# and made the column 2011(Earnings for 2011)
+# na.rm remove the NA in the values
+earnings2011<-earnings2011%>%group_by(Field)%>%
+  summarise("2011"=mean(Earnings, na.rm = TRUE))
+```
+```{r}
+#Join the table based on field keep=FALSE removes the duplicate of column field 
+#Donot need to keep field column from both tables
+merged_table<-left_join(earnings2011,earnings2016,by=c("Field"="Field"),keep=FALSE)
+```
+```{r}
+#Normalising the data using gather key=Year,Value=Salary,use columns 2011 and 2016
+merged_table<-merged_table%>%gather(Year,Salary,"2011":"2016")
+```
+```{r}
+#Plotting a bar graph with x as Field, y as Salary, fill apply colors to the year
+#stat ="identity" represents the height of the bar to represent values
+#lables is used to shortenen the labels as it is too long
+#position_dodge is used to plot the bars separateley
+ggplot(data=merged_table, aes(x=Field, y=Salary,fill=Year))+
+  geom_bar(stat="identity",position=position_dodge())+scale_x_discrete(
+      labels = c("Education"="Education","Arts and Humanities"="Arts",
+      "Social Sciences, Journalism and Information"="Social\n&Journalism",
+      "Business, Administration and Law"="Business\n&law",
+      "Natural Sciences, Mathematics and Statistics"="Maths",
+      "Information and Communication Technologies"="IT",
+      "Engineering, Manufacturing and Construction"="Engineering",
+      "Agriculture, Forestry, Fisheries and Veterinary"="Agro",
+      "Health and Welfare"="Health"))
+```
+
+As we can see the mean earnings increased for every field for the year 2016 except for Education.
